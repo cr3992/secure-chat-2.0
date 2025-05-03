@@ -584,7 +584,22 @@
 
         async function fetchMessages() {
             try {
-                const response = await fetch('https://script.google.com/macros/s/AKfycbzE9QJFc9H-rrQsM1SwddCxvd79BvdgtznLd6b2MFzfCeZEcw2n4rnJJE83FSLDT6V-IA/exec');
+                const response = await fetch('https://script.google.com/macros/s/AKfycbzE9QJFc9H-rrQsM1SwddCxvd79BvdgtznLd6b2MFzfCeZEcw2n4rnJJE83FSLDT6V-IA/exec', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Response is not JSON');
+                }
+
                 const messages = await response.json();
                 const chatMessages = document.getElementById('chatMessages');
                 chatMessages.innerHTML = '';
@@ -640,7 +655,14 @@
 
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             } catch (error) {
-                console.error('Error fetching messages:', error);
+                console.error('Error fetching messages:', error.message);
+                // Optionally, display a message to the user
+                const chatMessages = document.getElementById('chatMessages');
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'message-received';
+                errorDiv.textContent = 'Failed to load messages. Please try again later.';
+                chatMessages.appendChild(errorDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
         }
     </script>
