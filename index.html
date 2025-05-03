@@ -75,12 +75,16 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             font-size: calc(13px + 0.4vw);
             line-height: 1.4;
+            position: relative;
         }
         .message-sent {
             background: #007bff;
             color: #fff;
             align-self: flex-end;
             border-bottom-right-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .message-received {
             background: #e9ecef;
@@ -90,6 +94,17 @@
         }
         .message-sent:hover, .message-received:hover {
             transform: scale(1.02);
+        }
+        .tick {
+            font-size: 12px;
+            color: #fff;
+            margin-left: 5px;
+        }
+        .tick.single::before {
+            content: '✓';
+        }
+        .tick.double::before {
+            content: '✓✓';
         }
         .input-container {
             position: fixed;
@@ -379,16 +394,8 @@
     <script>
         let currentUser = { name: '', phone: '' };
         let currentChat = { name: '', phone: '' };
-        let submitted = false;
         let messageInterval = null;
-
-        // Handle iframe onload event
-        document.getElementById('hidden_iframe').addEventListener('load', () => {
-            if (submitted) {
-                alert('Message sent');
-                submitted = false;
-            }
-        });
+        let pendingMessages = []; // Array to store pending messages with timestamps
 
         // Load user settings and contacts on page load
         document.addEventListener('DOMContentLoaded', () => {
@@ -548,6 +555,7 @@
             const now = new Date();
             const date = now.toISOString().split('T')[0];
             const time = now.toTimeString().split(' ')[0];
+            const timestamp = now.toISOString();
 
             document.getElementById('input_msg').value = message;
             document.getElementById('input_sender').value = currentUser.phone;
@@ -555,16 +563,23 @@
             document.getElementById('input_date').value = date;
             document.getElementById('input_time').value = time;
 
-            submitted = true;
-            document.getElementById('myForm').submit();
-            document.getElementById('messageInput').value = '';
+            // Add message to pending messages with single tick
+            pendingMessages.push({ message, sender: currentUser.phone, receiver: currentChat.phone, date, time, timestamp });
 
-            // Display sent message immediately
+            // Display sent message with single tick immediately
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message-sent';
-            messageDiv.textContent = message;
+            messageDiv.innerHTML = `
+                <span>${message}</span>
+                <span class="tick single"></span>
+            `;
+            messageDiv.dataset.timestamp = timestamp;
             document.getElementById('chatMessages').appendChild(messageDiv);
             document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+
+            // Submit the form
+            document.getElementById('myForm').submit();
+            document.getElementById('messageInput').value = '';
         }
 
         async function fetchMessages() {
@@ -580,11 +595,49 @@
                         (msg.sender === currentChat.phone && msg.receiver === currentUser.phone)
                     ) {
                         const messageDiv = document.createElement('div');
-                        messageDiv.className = msg.sender === currentUser.phone ? 'message-sent' : 'message-received';
-                        messageDiv.textContent = msg.message;
+                        const isSent = msg.sender === currentUser.phone;
+                        messageDiv.className = isSent ? 'message-sent' : 'message-received';
+
+                        if (isSent) {
+                            // Check if this message was pending
+                            const pendingIndex = pendingMessages.findIndex(
+                                pm => pm.message === msg.message && pm.sender === msg.sender && pm.receiver === msg.receiver && pm.date === msg.date && pm.time === msg.time
+                            );
+
+                            // If found in pending messages, update to double tick
+                            if (pendingIndex !== -1) {
+                                messageDiv.innerHTML = `
+                                    <span>${msg.message}</span>
+                                    <span class="tick double"></span>
+                                `;
+                                messageDiv.dataset.timestamp = pendingMessages[pendingIndex].timestamp;
+                                pendingMessages.splice(pendingIndex, 1); // Remove from pending
+                            } else {
+                                messageDiv.innerHTML = `
+                                    <span>${msg.message}</span>
+                                    <span class="tick double"></span>
+                                `;
+                            }
+                        } else {
+                            messageDiv.textContent = msg.message;
+                        }
+
                         chatMessages.appendChild(messageDiv);
                     }
                 });
+
+                // Re-append any pending messages that haven't been delivered yet
+                pendingMessages.forEach(pm => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message-sent';
+                    messageDiv.innerHTML = `
+                        <span>${pm.message}</span>
+                        <span class="tick single"></span>
+                    `;
+                    messageDiv.dataset.timestamp = pm.timestamp;
+                    chatMessages.appendChild(messageDiv);
+                });
+
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             } catch (error) {
                 console.error('Error fetching messages:', error);
